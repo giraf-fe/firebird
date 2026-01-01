@@ -15,6 +15,14 @@ enum sched_item_index {
         SCHED_LCD,
         SCHED_TIMERS,
         SCHED_WATCHDOG,
+        SCHED_TIMER_12M,   /* SP804 Timer 1 at 12MHz */
+        /* SP804 timer expiry events (2 timers per module, 3 modules) */
+        SCHED_SP804_T0_0,  /* Timer module 0, timer 0 */
+        SCHED_SP804_T0_1,  /* Timer module 0, timer 1 */
+        SCHED_SP804_T1_0,  /* Timer module 1, timer 0 */
+        SCHED_SP804_T1_1,  /* Timer module 1, timer 1 */
+        SCHED_SP804_T2_0,  /* Timer module 2, timer 0 */
+        SCHED_SP804_T2_1,  /* Timer module 2, timer 1 */
         SCHED_NUM_ITEMS
 };
 

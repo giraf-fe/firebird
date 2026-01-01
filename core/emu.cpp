@@ -19,6 +19,7 @@
 #include "schedule.h"
 #include "misc.h"
 #include "mem.h"
+#include "timer.h"
 
 /* cycle_count_delta is a (usually negative) number telling what the time is relative
  * to the next scheduled event. See sched.c */
@@ -119,6 +120,7 @@ void throttle_interval_event(int index)
      * keeping the emulator speed down, and other miscellaneous stuff
      * that needs to be done periodically */
     event_repeat(index, 27000000 / 100);
+
     // 100Hz -> called every virtual 10ms
     const auto virt_throttle_interval = std::chrono::milliseconds(10);
 
@@ -347,6 +349,12 @@ void emu_loop(bool reset)
 
     while (!exiting) {
         sched_process_pending_events();
+
+        // no clue what cycle_count_delta means but this makes the fast timer close
+        // i get 96mhz timer instead of 99 though
+        if (emulate_cx2)
+            timer_cx_fast_tick(-cycle_count_delta / 4);
+
         while (!exiting && cycle_count_delta < 0) {
             if (cpu_events & EVENT_RESET) {
                 gui_status_printf("Reset");

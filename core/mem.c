@@ -21,6 +21,7 @@
 #include "translate.h"
 #include "usb_cx2.h"
 #include "cx2.h"
+#include "timer.h"
 
 uint8_t   (*read_byte_map[64])(uint32_t addr);
 uint16_t  (*read_half_map[64])(uint32_t addr);
@@ -522,6 +523,7 @@ bool memory_suspend(emu_snapshot *snapshot)
             // TODO: No flags saved. Only RF_EXEC_BREAKPOINT and maybe RF_READ_ONLY are interesting.
             && snapshot_write(snapshot, mem_and_flags, MEM_MAXSIZE)
             && misc_suspend(snapshot)
+            && timer_suspend(snapshot)
             && keypad_suspend(snapshot)
             && usb_suspend(snapshot)
             && lcd_suspend(snapshot)
@@ -544,6 +546,7 @@ bool memory_resume(const emu_snapshot *snapshot)
             && snapshot_read(snapshot, mem_and_flags, MEM_MAXSIZE)
             && memset(mem_and_flags + MEM_MAXSIZE, 0, MEM_MAXSIZE) // Set all flags to 0
             && misc_resume(snapshot)
+            && timer_resume(snapshot)
             && keypad_resume(snapshot)
             && usb_resume(snapshot)
             && lcd_resume(snapshot)

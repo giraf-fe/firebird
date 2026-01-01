@@ -8,6 +8,7 @@
 #include "keypad.h"
 #include "flash.h"
 #include "mem.h"
+#include "timer.h"
 
 // Miscellaneous hardware modules deemed too trivial to get their own files
 
@@ -156,90 +157,7 @@ void gpio_write(uint32_t addr, uint32_t value) {
     bad_write_word(addr, value);
 }
 
-/* 90010000, 900C0000, 900D0000 */
-static timer_state timer;
-#define ADDR_TO_TP(addr) (&timer.pairs[((addr) >> 16) % 5])
 
-uint32_t timer_read(uint32_t addr) {
-    struct timerpair *tp = ADDR_TO_TP(addr);
-    cycle_count_delta = 0; // Avoid slowdown by fast-forwarding through polling loops
-    switch (addr & 0x003F) {
-        case 0x00: return tp->timers[0].value;
-        case 0x04: return tp->timers[0].divider;
-        case 0x08: return tp->timers[0].control;
-        case 0x0C: return tp->timers[1].value;
-        case 0x10: return tp->timers[1].divider;
-        case 0x14: return tp->timers[1].control;
-        case 0x18: case 0x1C: case 0x20: case 0x24: case 0x28: case 0x2C:
-            return tp->completion_value[((addr & 0x3F) - 0x18) >> 2];
-    }
-    return bad_read_word(addr);
-}
-void timer_write(uint32_t addr, uint32_t value) {
-    struct timerpair *tp = ADDR_TO_TP(addr);
-    switch (addr & 0x003F) {
-        case 0x00: tp->timers[0].start_value = tp->timers[0].value = value; return;
-        case 0x04: tp->timers[0].divider = value; return;
-        case 0x08: tp->timers[0].control = value & 0x1F; return;
-        case 0x0C: tp->timers[1].start_value = tp->timers[1].value = value; return;
-        case 0x10: tp->timers[1].divider = value; return;
-        case 0x14: tp->timers[1].control = value & 0x1F; return;
-        case 0x18: case 0x1C: case 0x20: case 0x24: case 0x28: case 0x2C:
-            tp->completion_value[((addr & 0x3F) - 0x18) >> 2] = value; return;
-        case 0x30: return;
-    }
-    bad_write_word(addr, value);
-}
-static void timer_int_check(struct timerpair *tp) {
-    int_set(INT_TIMER0 + (tp - timer.pairs), tp->int_status & tp->int_mask);
-}
-void timer_advance(struct timerpair *tp, int ticks) {
-    struct timer *t;
-    for (t = &tp->timers[0]; t != &tp->timers[2]; t++) {
-        int newticks;
-        if (t->control & 0x10)
-            continue;
-        for (newticks = t->ticks + ticks; newticks > t->divider; newticks -= (t->divider + 1)) {
-            int compl = t->control & 7;
-            t->ticks = 0;
-
-            if (compl == 0 && t->value == 0)
-                /* nothing */;
-            else if (compl != 0 && compl != 7 && t->value == tp->completion_value[compl - 1])
-                t->value = t->start_value;
-            else
-                t->value += (t->control & 8) ? +1 : -1;
-
-            if (t == &tp->timers[0]) {
-                for (compl = 0; compl < 6; compl++) {
-                    if (t->value == tp->completion_value[compl]) {
-                        tp->int_status |= 1 << compl;
-                        timer_int_check(tp);
-                    }
-                }
-            }
-        }
-        t->ticks = newticks;
-    }
-}
-static void timer_event(int index) {
-    // TODO: should use seperate schedule item for each timer,
-    //       only fired on significant events
-    event_repeat(index, 1);
-    timer_advance(&timer.pairs[0], 703);
-    timer_advance(&timer.pairs[1], 1);
-    timer_advance(&timer.pairs[2], 1);
-}
-void timer_reset() {
-    memset(timer.pairs, 0, sizeof timer.pairs);
-    int i;
-    for (i = 0; i < 3; i++) {
-        timer.pairs[i].timers[0].control = 0x10;
-        timer.pairs[i].timers[1].control = 0x10;
-    }
-    sched.items[SCHED_TIMERS].clock = CLOCK_32K;
-    sched.items[SCHED_TIMERS].proc = timer_event;
-}
 
 /* 90030000: 4KiB of some kind of memory */
 static fastboot_state fastboot;
@@ -409,6 +327,11 @@ void rtc_write(uint32_t addr, uint32_t value) {
 }
 
 /* 900A0000 */
+
+// wants timer for some reason
+extern struct timer_state timer;
+void timer_int_check(struct timerpair *tp);
+
 uint32_t misc_read(uint32_t addr) {
     struct timerpair *tp = &timer.pairs[((addr - 0x10) >> 3) & 3];
     static const struct { uint32_t hi, lo; } idreg[4] = {
@@ -539,109 +462,6 @@ void pmu_write(uint32_t addr, uint32_t value) {
         case 0x20: pmu.disable2 = value; return;
     }
     bad_write_word(addr, value);
-}
-
-/* 90010000, 900C0000(?), 900D0000 */
-static timer_cx_state timer_cx;
-static void timer_cx_event(int index);
-
-void timer_cx_int_check(int which) {
-    int_set(INT_TIMER0+which, (timer_cx.timer[which][0].interrupt & timer_cx.timer[which][0].control >> 5)
-            | (timer_cx.timer[which][1].interrupt & timer_cx.timer[which][1].control >> 5));
-}
-uint32_t timer_cx_read(uint32_t addr) {
-    cycle_count_delta += 1000; // avoid slowdown with polling loops
-    int which = (addr >> 16) % 5;
-    struct cx_timer *t = &timer_cx.timer[which][addr >> 5 & 1];
-    switch (addr & 0xFFFF) {
-        case 0x0000: case 0x0020: return t->load;
-        case 0x0004: case 0x0024: return t->value;
-        case 0x0008: case 0x0028: return t->control;
-        case 0x0010: case 0x0030: return t->interrupt;
-        case 0x0014: case 0x0034: return t->interrupt & t->control >> 5;
-        case 0x0018: case 0x0038: return t->load;
-        case 0x001C: case 0x003C: return 0; //?
-        // The OS reads from 0x80 and writes it into 0x30 ???
-        case 0x0080: return 0;
-        case 0x0FE0: return 0x04;
-        case 0x0FE4: return 0x18;
-        case 0x0FE8: return 0x14;
-        case 0x0FEC: return 0x00;
-        case 0x0FF0: return 0x0D;
-        case 0x0FF4: return 0xF0;
-        case 0x0FF8: return 0x05;
-        case 0x0FFC: return 0xB1;
-    }
-    return bad_read_word(addr);
-}
-void timer_cx_write(uint32_t addr, uint32_t value) {
-    int which = (addr >> 16) % 5;
-    struct cx_timer *t = &timer_cx.timer[which][addr >> 5 & 1];
-    switch (addr & 0xFFFF) {
-        case 0x0000: case 0x0020: t->reload = 1; /* fallthrough */
-        case 0x0018: case 0x0038: t->load = value; return;
-        case 0x0004: case 0x0024: return;
-        case 0x0008: case 0x0028:
-            t->control = value;
-            if(which == 0 && (value & 0x80))
-                error("Fast timer not implemented");
-            timer_cx_int_check(which);
-        return;
-        case 0x000C: case 0x002C: t->interrupt = 0; timer_cx_int_check(which); return;
-
-        case 0x0080: return; // ???
-    }
-    bad_write_word(addr, value);
-}
-void timer_cx_advance(int which) {
-    int i;
-    for (i = 0; i < 2; i++) {
-        struct cx_timer *t = &timer_cx.timer[which][i];
-        t->prescale++;
-        if (!(t->control & 0x80))
-            continue;
-        uint32_t oldvalue = (t->control & 2) ? t->value : t->value & 0xFFFF;
-        uint32_t value = oldvalue;
-        if (t->reload) {
-            t->reload = 0;
-            value = t->load;
-        } else if (!(t->prescale & ((1 << (t->control & 0xC)) - 1))) {
-            if (value == 0) {
-                if (!(t->control & 1)) {
-                    value--;
-                    if (t->control & 0x40)
-                        value = t->load;
-                }
-            } else {
-                value--;
-            }
-        }
-        t->value = (t->control & 2) ? value : (t->value & 0xFFFF0000) | (value & 0xFFFF);
-        if (oldvalue != 0 && value == 0) {
-            t->interrupt = 1;
-            timer_cx_int_check(which);
-        }
-    }
-}
-static void timer_cx_event(int index) {
-    // TODO: should use seperate schedule item for each timer,
-    //       only fired on significant events
-    event_repeat(index, 1);
-    // fast timer not implemented here...
-    timer_cx_advance(1);
-    timer_cx_advance(2);
-}
-void timer_cx_reset() {
-    memset(timer_cx.timer, 0, sizeof(timer_cx.timer));
-    int which, i;
-    for (which = 0; which < 3; which++) {
-        for (i = 0; i < 2; i++) {
-            timer_cx.timer[which][i].value = 0xFFFFFFFF;
-            timer_cx.timer[which][i].control = 0x20;
-        }
-    }
-    sched.items[SCHED_TIMERS].clock = CLOCK_32K;
-    sched.items[SCHED_TIMERS].proc = timer_cx_event;
 }
 
 /* 900F0000 */
@@ -898,12 +718,10 @@ bool misc_suspend(emu_snapshot *snapshot)
 {
     return snapshot_write(snapshot, &memctl_cx, sizeof(memctl_cx))
             && snapshot_write(snapshot, &gpio, sizeof(gpio))
-            && snapshot_write(snapshot, &timer, sizeof(timer))
             && snapshot_write(snapshot, &fastboot, sizeof(fastboot))
             && snapshot_write(snapshot, &watchdog, sizeof(watchdog))
             && snapshot_write(snapshot, &rtc, sizeof(rtc))
             && snapshot_write(snapshot, &pmu, sizeof(pmu))
-            && snapshot_write(snapshot, &timer_cx, sizeof(timer_cx))
             && snapshot_write(snapshot, &hdq1w, sizeof(hdq1w))
             && snapshot_write(snapshot, &led, sizeof(led))
             && snapshot_write(snapshot, &adc, sizeof(adc));
@@ -913,12 +731,10 @@ bool misc_resume(const emu_snapshot *snapshot)
 {
     return snapshot_read(snapshot, &memctl_cx, sizeof(memctl_cx))
             && snapshot_read(snapshot, &gpio, sizeof(gpio))
-            && snapshot_read(snapshot, &timer, sizeof(timer))
             && snapshot_read(snapshot, &fastboot, sizeof(fastboot))
             && snapshot_read(snapshot, &watchdog, sizeof(watchdog))
             && snapshot_read(snapshot, &rtc, sizeof(rtc))
             && snapshot_read(snapshot, &pmu, sizeof(pmu))
-            && snapshot_read(snapshot, &timer_cx, sizeof(timer_cx))
             && snapshot_read(snapshot, &hdq1w, sizeof(hdq1w))
             && snapshot_read(snapshot, &led, sizeof(led))
             && snapshot_read(snapshot, &adc, sizeof(adc));

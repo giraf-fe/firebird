@@ -181,6 +181,8 @@ SOURCES += $$ASMCODE_IMPL \
     core/schedule.c \
     core/serial.c \
     core/sha256.c \
+    core/sp804.c \
+    core/timer.c \
     core/usb.c \
     core/usb_cx2.cpp \
     core/usblink.c \
@@ -233,6 +235,8 @@ HEADERS += \
     core/mmu.h \
     core/schedule.h \
     core/sha256.h \
+    core/sp804.h \
+    core/timer.h \
     core/translate.h \
     core/usb.h \
     core/usblink.h \

@@ -41,29 +41,6 @@ void gpio_reset();
 uint32_t gpio_read(uint32_t addr);
 void gpio_write(uint32_t addr, uint32_t value);
 
-struct timer {
-    uint16_t ticks;
-    uint16_t start_value;     /* Write value of +00 */
-    uint16_t value;           /* Read value of +00  */
-    uint16_t divider;         /* Value of +04 */
-    uint16_t control;         /* Value of +08 */
-};
-
-struct timerpair {
-    struct timer timers[2];
-    uint16_t completion_value[6];
-    uint8_t int_mask;
-    uint8_t int_status;
-};
-
-typedef struct timer_state {
-    struct timerpair pairs[3];
-} timer_state;
-
-uint32_t timer_read(uint32_t addr);
-void timer_write(uint32_t addr, uint32_t value);
-void timer_reset(void);
-
 void xmodem_send(const char *filename);
 
 typedef struct serial_state {
@@ -146,22 +123,6 @@ void pmu_reset(void);
 uint32_t pmu_read(uint32_t addr);
 void pmu_write(uint32_t addr, uint32_t value);
 
-struct cx_timer {
-    uint32_t load;
-    uint32_t value;
-    uint8_t prescale;
-    uint8_t control;
-    uint8_t interrupt;
-    uint8_t reload;
-};
-
-typedef struct timer_cx_state {
-    struct cx_timer timer[3][2];
-} timer_cx_state;
-
-uint32_t timer_cx_read(uint32_t addr);
-void timer_cx_write(uint32_t addr, uint32_t value);
-void timer_cx_reset(void);
 
 typedef struct hdq1w_state {
     uint8_t lcd_contrast;
