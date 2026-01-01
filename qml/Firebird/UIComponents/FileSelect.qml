@@ -1,6 +1,6 @@
 import QtQuick 2.0
-import QtQuick.Controls 1.0
-import QtQuick.Dialogs 1.0
+import QtQuick.Controls 2.0
+import QtQuick.Dialogs
 import QtQuick.Layouts 1.0
 import Firebird.Emu 1.0
 
@@ -18,9 +18,9 @@ RowLayout {
         id: dialogLoader
         active: false
         sourceComponent: FileDialog {
-            folder: Emu.dir(filePath)
+            currentFolder: Emu.dir(filePath)
             // If save dialogs are not supported, force an open dialog
-            selectExisting: parent.selectExisting || !Emu.saveDialogSupported()
+            // selectExisting: parent.selectExisting || !Emu.saveDialogSupported()
             onAccepted: {
                 filePath = Emu.toLocalFile(fileUrl);
                 forceRefresh++;
@@ -63,14 +63,14 @@ RowLayout {
     // if the open file dialog doesn't allow creation, to open a file creation dialog.
     IconButton {
         visible: showCreateButton || (!selectExisting && !Emu.saveDialogSupported())
-        icon: "qrc:/icons/resources/icons/document-new.png"
+        iconSource: "qrc:/icons/resources/icons/document-new.png"
 
         Loader {
             id: createDialogLoader
             active: false
             sourceComponent: FileDialog {
-                folder: Emu.dir(filePath)
-                selectExisting: false
+                currentFolder: Emu.dir(filePath)
+                // selectExisting: false
                 onAccepted: {
                     filePath = Emu.toLocalFile(fileUrl);
                     forceRefresh++;
@@ -89,7 +89,7 @@ RowLayout {
     }
 
     IconButton {
-        icon: "qrc:/icons/resources/icons/document-edit.png"
+        iconSource: "qrc:/icons/resources/icons/document-edit.png"
         onClicked: {
             dialogLoader.active = true;
             dialogLoader.item.visible = true;

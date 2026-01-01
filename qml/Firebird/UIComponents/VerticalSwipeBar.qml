@@ -20,13 +20,13 @@ Rectangle {
         anchors.fill: parent
 
         onPressed: {
-            orig.x = mouse.x;
-            orig.y = mouse.y;
+            orig.x = mouseX;
+            orig.y = mouseY;
         }
 
         onReleased: {
-            if(Math.abs(orig.x - mouse.x) < 5
-               && Math.abs(orig.y - mouse.y) < 5)
+            if(Math.abs(orig.x - mouseX) < 5
+               && Math.abs(orig.y - mouseY) < 5)
             parent.clicked();
         }
     }

@@ -1,16 +1,16 @@
-import QtQuick 2.0
+import QtQuick
 import QtQuick.Layouts 1.1
-import QtQuick.Controls 1.2
-import QtQuick.Dialogs 1.3
+import QtQuick.Controls as QtQC
+import QtQuick.Dialogs
 import Firebird.Emu 1.0
 import Firebird.UIComponents 1.0
 
-Dialog {
+QtQC.Dialog {
     id: flashDialog
     title: qsTr("Create Flash Image")
     // Work around QTBUG-89607: Menu (used by ComboBox) doesn't work in modal windows
-    modality: Qt.platform.pluginName == "cocoa" ? Qt.NonModal : Qt.WindowModal
-    standardButtons: Dialog.Save | Dialog.Cancel
+    // modality: Qt.platform.pluginName == "cocoa" ? Qt.NonModal : Qt.WindowModal
+    standardButtons: QtQC.Dialog.Save | QtQC.Dialog.Cancel
     onVisibleChanged: {
         // For some reason the initial size on wayland is too big.
         // Setting it to -1 initially appears to work around that.
@@ -20,7 +20,11 @@ Dialog {
         }
     }
 
+    property real dragStartX: 0
+    property real dragStartY: 0
+
     signal flashCreated(string filePath)
+    height: 300
 
     GridLayout {
         id: layout
@@ -33,10 +37,10 @@ Dialog {
             text: qsTr("Model:")
         }
 
-        ComboBox {
+        QtQC.ComboBox {
             id: modelCombo
-            property bool cxSelected: modelCombo.currentIndex == 2 || modelCombo.currentIndex == 3
-            property bool cx2Selected: modelCombo.currentIndex == 4
+            property bool cxSelected: modelCombo.currentIndex === 2 || modelCombo.currentIndex === 3
+            property bool cx2Selected: modelCombo.currentIndex === 4
             property int productId: [0x0E0, 0x0C2, 0x100, 0x0F0, 0x1C0][currentIndex]
             Layout.fillWidth: true
             model: ["Touchpad", "Touchpad CAS", "CX", "CX CAS", "CX II (/-T/CAS)"]
@@ -49,7 +53,7 @@ Dialog {
             text: qsTr("CX Subtype:")
         }
 
-        ComboBox {
+        QtQC.ComboBox {
             id: subtypeCombo
             property int featureValue: [0x005, 0x085, 0x185][currentIndex]
             Layout.fillWidth: true
@@ -156,7 +160,7 @@ Dialog {
         id: fileDialogLoader
         active: false
         sourceComponent: FileDialog {
-            selectExisting: false
+            // selectExisting: false
             onAccepted: {
                 var filePath = Emu.toLocalFile(fileUrl);
                 var success = false;
@@ -175,7 +179,7 @@ Dialog {
         }
     }
 
-    onActionChosen: {
+    onAccepted: {
         if (action.button === Dialog.Save) {
             // Don't close the dialog now, but only
             // after successful saving
