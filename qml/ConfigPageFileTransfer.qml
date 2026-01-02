@@ -35,13 +35,12 @@ ColumnLayout {
         active: false
         sourceComponent: FileDialog {
             nameFilters: [ qsTr("TNS Documents") +"(*.tns)", qsTr("Operating Systems") + "(*.tno *.tnc *.tco *.tcc *.tlo *.tmo *.tmc *.tco2 *.tcc2 *.tct2)" ]
-            // selectMultiple: true
-            options: FileDialog.OpenFiles
+            fileMode: FileDialog.OpenFiles
             onAccepted: {
                 transferStatus.text = qsTr("Starting");
                 transferProgress.indeterminate = true;
-                for(let i = 0; i < fileUrls.length; ++i)
-                    Emu.sendFile(fileUrls[i], Emu.usbdir);
+                for(let i = 0; i < selectedFiles.length; ++i)
+                    Emu.sendFile(selectedFiles[i], Emu.usbdir);
             }
         }
     }

@@ -21,8 +21,9 @@ RowLayout {
             currentFolder: Emu.dir(filePath)
             // If save dialogs are not supported, force an open dialog
             // selectExisting: parent.selectExisting || !Emu.saveDialogSupported()
+
             onAccepted: {
-                filePath = Emu.toLocalFile(fileUrl);
+                filePath = Emu.toLocalFile(selectedFile);
                 forceRefresh++;
             }
         }

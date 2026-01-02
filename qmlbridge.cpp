@@ -354,7 +354,9 @@ bool QMLBridge::createFlash(QString path, int productID, int featureValues, QStr
     }
 
     QFile flash_file(path);
-    if(!flash_file.open(QFile::WriteOnly) || !flash_file.write(reinterpret_cast<char*>(nand_data), nand_size))
+    bool openSuccess = flash_file.open(QIODevice::WriteOnly);
+    bool writeSuccess = flash_file.write(reinterpret_cast<char*>(nand_data), nand_size);
+    if(!openSuccess || !writeSuccess)
     {
         free(nand_data);
         return false;

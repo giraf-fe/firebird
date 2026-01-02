@@ -10,7 +10,7 @@ QtQC.Dialog {
     title: qsTr("Create Flash Image")
     // Work around QTBUG-89607: Menu (used by ComboBox) doesn't work in modal windows
     // modality: Qt.platform.pluginName == "cocoa" ? Qt.NonModal : Qt.WindowModal
-    standardButtons: QtQC.Dialog.Save | QtQC.Dialog.Cancel
+    // standardButtons: QtQC.Dialog.Save | QtQC.Dialog.Cancel
     onVisibleChanged: {
         // For some reason the initial size on wayland is too big.
         // Setting it to -1 initially appears to work around that.
@@ -24,7 +24,7 @@ QtQC.Dialog {
     property real dragStartY: 0
 
     signal flashCreated(string filePath)
-    height: 300
+    height: 300 // todo: make this not fixed
 
     GridLayout {
         id: layout
@@ -161,8 +161,9 @@ QtQC.Dialog {
         active: false
         sourceComponent: FileDialog {
             // selectExisting: false
+            fileMode: FileDialog.SaveFile
             onAccepted: {
-                var filePath = Emu.toLocalFile(fileUrl);
+                var filePath = Emu.basename(selectedFile);
                 var success = false;
                 if (!modelCombo.cx2Selected)
                     success = Emu.createFlash(filePath, modelCombo.productId, subtypeCombo.featureValue, manufSelect.filePath, boot2Select.filePath, osSelect.filePath, diagsSelect.filePath);
@@ -172,23 +173,38 @@ QtQC.Dialog {
                 if (success) {
                     flashCreated(filePath);
                     flashDialog.visible = false;
+                    flashDialog.accept()
                 }
-                else
+                else {
                     failureDialog.visible = true;
+                }
             }
         }
     }
 
-    onAccepted: {
-        if (action.button === Dialog.Save) {
-            // Don't close the dialog now, but only
-            // after successful saving
-            action.accepted = false;
+    footer: QtQC.DialogButtonBox {
+        standardButtons: QtQC.DialogButtonBox.Save | QtQC.DialogButtonBox.Cancel
 
+        onAccepted: {
             if (!layout.validationText) {
                 fileDialogLoader.active = true;
                 fileDialogLoader.item.visible = true;
             }
         }
+        onRejected: flashDialog.reject()
     }
+
+    // onAccepted: {
+
+    //     if (action.button === Dialog.Save) {
+    //         // Don't close the dialog now, but only
+    //         // after successful saving
+    //         action.accepted = false;
+
+    //         if (!layout.validationText) {
+    //             fileDialogLoader.active = true;
+    //             fileDialogLoader.item.visible = true;
+    //         }
+    //     }
+    // }
 }
