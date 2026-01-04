@@ -1,3 +1,4 @@
+#include <float.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -298,16 +299,40 @@ void unknown_9008_write(uint32_t addr, uint32_t value) {
 }
 
 /* 90090000 */
+// Based off a ARM PrimeCell RTC PL031 but some registers are different
 struct rtc_state rtc;
 
+static void rtc_event(int index);
+
 void rtc_reset() {
-    rtc.offset = 0;
+    rtc.offset = 0; // on hw, reset sets time to zero, but its more useful to start at the current time
+    rtc.alarmValue = 0; 
+    rtc.requestedSetTime = 0;
+    rtc.interruptMask = 0;
+    rtc.interruptStatus = 0;
+    rtc.status = 0;
+
+    rtc.timeAtSetTimeRequest = 0;
+
+    sched.items[SCHED_RTC].clock = CLOCK_32K;
+    sched.items[SCHED_RTC].proc = rtc_event;
+    event_repeat(SCHED_RTC, 1);
+}
+
+static void rtc_update_interrupt() {
+    int_set(INT_RTC, (rtc.interruptStatus & rtc.interruptMask) != 0);
 }
 
 uint32_t rtc_read(uint32_t addr) {
     switch (addr & 0xFFFF) {
-        case 0x00: return time(NULL) - rtc.offset;
-        case 0x14: return 0;
+        case 0x00: return time(NULL) + rtc.offset;
+        case 0x04: return rtc.alarmValue;
+        case 0x08: return rtc.requestedSetTime;
+        case 0x0C: return rtc.interruptMask;
+        case 0x10: return rtc.interruptStatus & rtc.interruptMask;
+        case 0x14: return rtc.status;
+
+        // peripheral ID
         case 0xFE0: return 0x31;
         case 0xFE4: return 0x10;
         case 0xFE8: return 0x04;
@@ -317,13 +342,56 @@ uint32_t rtc_read(uint32_t addr) {
 }
 void rtc_write(uint32_t addr, uint32_t value) {
     switch (addr & 0xFFFF) {
-        case 0x04: return;
-        case 0x08: rtc.offset = time(NULL) - value; return;
-        case 0x0C: return;
-        case 0x10: return;
-        case 0x1C: return;
+        case 0x04: {
+            rtc.status |= 0x02; // for accuracy, bit 2 states alarm set in progress
+            rtc.alarmValue = value;
+            rtc.status &= ~0x02;
+            return;
+        }
+        case 0x08: {
+            rtc.status |= 0x01; // for accuracy, bit 1 states time set in progress
+            rtc.requestedSetTime = value;
+            rtc.timeAtSetTimeRequest = time(NULL);
+            return;
+        }
+        case 0x0C: {
+            rtc.status |= 0x08;
+            rtc.interruptMask = value & 0x01;
+            rtc.status &= ~0x08;
+            rtc_update_interrupt();
+            return;
+        }
+        case 0x10: {
+            rtc.status |= 0x04;
+            rtc.interruptStatus &= ~value;
+            rtc.status &= ~0x04;
+            rtc_update_interrupt();
+            return;
+        }
+        case 0x1c: { // interrupt acknowledge
+            rtc.interruptStatus &= ~value;
+            rtc_update_interrupt();
+            return;
+        }
     }
     bad_write_word(addr, value);
+}
+
+static void rtc_event(int index) {
+    (void)index;
+
+    event_repeat(SCHED_RTC, 1000);
+    time_t now = time(NULL);
+    if (rtc.status & 0x01 && now - rtc.timeAtSetTimeRequest >= RTC_UPDATE_DELAY_SECONDS) {
+        rtc.offset = rtc.requestedSetTime - now;
+        rtc.status &= ~0x01;
+    }
+
+    if (now + rtc.offset == rtc.alarmValue) {
+        rtc.interruptStatus |= 0x01;
+    }
+
+    rtc_update_interrupt();
 }
 
 /* 900A0000 */

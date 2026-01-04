@@ -100,7 +100,17 @@ void unknown_9008_write(uint32_t addr, uint32_t value);
 
 typedef struct rtc_state {
     time_t offset;
+    time_t alarmValue;
+    time_t requestedSetTime;
+    uint8_t interruptMask;
+    uint8_t interruptStatus;
+    uint8_t status;
+
+    time_t timeAtSetTimeRequest;
 } rtc_state;
+// hackspire states that the clock does not read a new time until a couple seconds later
+// TODO: find out the delay on actual hardware
+#define RTC_UPDATE_DELAY_SECONDS 5
 
 void rtc_reset();
 uint32_t rtc_read(uint32_t addr);
